@@ -1,8 +1,8 @@
 
 const {modalReducer} = require('./modalReducer');
 const {config} = require('../config');
-const {tick} = require('./tick');
-const {initGrid} = require('../utils');
+const {tick, doSnip} = require('./tick');
+const {encodePosition} = require('bens_utils').helpers;
 
 const rootReducer = (state, action) => {
   if (state === undefined) return initState();
@@ -29,6 +29,10 @@ const rootReducer = (state, action) => {
     case 'TICK': {
       return tick(state);
     }
+    case 'SNIP': {
+      const {pos} = action;
+      return doSnip(state, pos);
+    }
   }
   return state;
 };
@@ -39,35 +43,32 @@ const rootReducer = (state, action) => {
 const initState = () => {
   const state = {
     time: 0,
-    grid: initGrid(config.gridSize.width, config.gridSize.height, null),
-    width: config.gridSize.width,
-    height: config.gridSize.height,
     rules: {
       'B': [
-        {rule: 'T^T^T^B', weight: 8},
-        {rule: 'T^T<B', weight: 4},
-        {rule: 'T>T^B', weight: 4},
-        {rule: 'T>T>B', weight: 5},
+        {rule: 'T^T^B', weight: 8},
+        // {rule: 'T^T<B', weight: 4},
+        // {rule: 'T>T^B', weight: 4},
+        // {rule: 'T>T>B', weight: 5},
         {rule: 'T<T<B', weight: 5},
-        {rule: 'T^<B>>B', weight: 3},
-        {rule: 'L^L>L<<L', weight: 5},
+        {rule: 'T>T>B', weight: 5},
+        {rule: 'T^[<B]T[>B]', weight: 5},
+        // {rule: 'L^L>L<<L', weight: 5},
       ],
       'D': [
         {rule: 'D', weight: 1},
       ],
       'T': [
         {rule: 'T', weight: 50},
-        {rule: 'D>T<<T', weight: 2},
-        {rule: 'B', weight: 1},
-        {rule: '', weight: 1},
       ],
       'L': [
         {rule: 'L', weight: 20},
+        {rule: 'B', weight: 2},
       ],
     },
+    grammar: 'B',
+    initialPosition: {x: 25, y: 35},
+    gridMap: {[encodePosition({x: 25, y: 35})]: {index: 0, dir: 'UP', symbol: 'B', isEnd: true}},
   };
-
-  state.grid[25][35] = 'B';
 
   return state;
 }

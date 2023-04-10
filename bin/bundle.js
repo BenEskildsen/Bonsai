@@ -3,7 +3,8 @@ const React = require('react');
 const {
   Button,
   Modal,
-  Canvas
+  Canvas,
+  useMouseHandler
 } = require('bens_ui_components');
 const {
   useEnhancedReducer
@@ -15,14 +16,26 @@ const {
   render
 } = require('../render');
 const {
+  floor
+} = require('bens_utils').vectors;
+const {
   rootReducer,
   initState
 } = require('../reducers/rootReducer');
+const {
+  encodePosition
+} = require('bens_utils').helpers;
 const {
   useEffect,
   useState,
   useMemo
 } = React;
+const normalizePos = (pos, worldSize, canvasSize) => {
+  return {
+    x: pos.x * worldSize.width / canvasSize.width,
+    y: pos.y * worldSize.height / canvasSize.height
+  };
+};
 function Main(props) {
   const [state, dispatch, getState] = useEnhancedReducer(rootReducer, initState());
   window.getState = getState;
@@ -30,6 +43,24 @@ function Main(props) {
   useEffect(() => {
     render(getState());
   }, [state.time]);
+  useMouseHandler("canvas", {
+    dispatch,
+    getState
+  }, {
+    leftDown: (state, dispatch, p) => {
+      const pos = floor(normalizePos(p, {
+        width: config.gridSize.width,
+        height: config.gridSize.height
+      }, {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }));
+      dispatch({
+        type: 'SNIP',
+        pos
+      });
+    }
+  });
   let content = /*#__PURE__*/React.createElement("div", {
     style: {}
   }, /*#__PURE__*/React.createElement(Canvas, {
@@ -40,7 +71,7 @@ function Main(props) {
   return /*#__PURE__*/React.createElement(React.Fragment, null, content, state.modal);
 }
 module.exports = Main;
-},{"../config":2,"../reducers/rootReducer":5,"../render":7,"bens_ui_components":32,"react":47}],2:[function(require,module,exports){
+},{"../config":2,"../reducers/rootReducer":5,"../render":7,"bens_ui_components":32,"bens_utils":39,"react":47}],2:[function(require,module,exports){
 const config = {
   gridSize: {
     width: 60,
@@ -61,7 +92,7 @@ const config = {
       color: 'green'
     }
   },
-  msPerTick: 500
+  msPerTick: 1500
 };
 module.exports = {
   config
@@ -111,11 +142,12 @@ const {
   config
 } = require('../config');
 const {
-  tick
+  tick,
+  doSnip
 } = require('./tick');
 const {
-  initGrid
-} = require('../utils');
+  encodePosition
+} = require('bens_utils').helpers;
 const rootReducer = (state, action) => {
   if (state === undefined) return initState();
   switch (action.type) {
@@ -142,6 +174,13 @@ const rootReducer = (state, action) => {
       {
         return tick(state);
       }
+    case 'SNIP':
+      {
+        const {
+          pos
+        } = action;
+        return doSnip(state, pos);
+      }
   }
   return state;
 };
@@ -151,32 +190,27 @@ const rootReducer = (state, action) => {
 const initState = () => {
   const state = {
     time: 0,
-    grid: initGrid(config.gridSize.width, config.gridSize.height, null),
-    width: config.gridSize.width,
-    height: config.gridSize.height,
     rules: {
       'B': [{
-        rule: 'T^T^T^B',
+        rule: 'T^T^B',
         weight: 8
-      }, {
-        rule: 'T^T<B',
-        weight: 4
-      }, {
-        rule: 'T>T^B',
-        weight: 4
+      },
+      // {rule: 'T^T<B', weight: 4},
+      // {rule: 'T>T^B', weight: 4},
+      // {rule: 'T>T>B', weight: 5},
+      {
+        rule: 'T<T<B',
+        weight: 5
       }, {
         rule: 'T>T>B',
         weight: 5
       }, {
-        rule: 'T<T<B',
+        rule: 'T^[<B]T[>B]',
         weight: 5
-      }, {
-        rule: 'T^<B>>B',
-        weight: 3
-      }, {
-        rule: 'L^L>L<<L',
-        weight: 5
-      }],
+      }
+      // {rule: 'L^L>L<<L', weight: 5},
+      ],
+
       'D': [{
         rule: 'D',
         weight: 1
@@ -184,36 +218,55 @@ const initState = () => {
       'T': [{
         rule: 'T',
         weight: 50
-      }, {
-        rule: 'D>T<<T',
-        weight: 2
-      }, {
-        rule: 'B',
-        weight: 1
-      }, {
-        rule: '',
-        weight: 1
       }],
       'L': [{
         rule: 'L',
         weight: 20
+      }, {
+        rule: 'B',
+        weight: 2
       }]
+    },
+    grammar: 'B',
+    initialPosition: {
+      x: 25,
+      y: 35
+    },
+    gridMap: {
+      [encodePosition({
+        x: 25,
+        y: 35
+      })]: {
+        index: 0,
+        dir: 'UP',
+        symbol: 'B',
+        isEnd: true
+      }
     }
   };
-  state.grid[25][35] = 'B';
   return state;
 };
 module.exports = {
   rootReducer,
   initState
 };
-},{"../config":2,"../utils":8,"./modalReducer":4,"./tick":6}],6:[function(require,module,exports){
+},{"../config":2,"./modalReducer":4,"./tick":6,"bens_utils":39}],6:[function(require,module,exports){
 const {
   initGrid
 } = require('../utils');
 const {
   weightedOneOf
 } = require('bens_utils').stochastic;
+const {
+  encodePosition
+} = require('bens_utils').helpers;
+const {
+  config
+} = require('../config');
+const {
+  getParenLevel,
+  getNextDir
+} = require('../utils');
 const tick = state => {
   const {
     width,
@@ -222,80 +275,174 @@ const tick = state => {
     rules
   } = state;
   state.time++;
-  const nextGrid = initGrid(width, height, null);
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height; y++) {
-      if (!grid[x][y]) continue;
-      const rules = state.rules[grid[x][y]];
-      if (!rules) continue;
-      const rule = weightedOneOf(rules, rules.map(r => r.weight)).rule;
-      doRule(nextGrid, rule, {
-        x,
-        y
-      });
+  let nextGrammar = '';
+  let gridMap = state.gridMap;
+  let i = 0;
+  for (let c of state.grammar) {
+    if (!state.rules[c]) {
+      nextGrammar += c;
+      continue;
     }
+    ;
+    const rule = weightedOneOf(state.rules[c], state.rules[c].map(r => r.weight)).rule;
+    nextGrammar += rule;
+    i++;
   }
-  state.grid = nextGrid;
   return {
-    ...state
+    ...state,
+    grammar: nextGrammar,
+    gridMap: genGrid({
+      ...state,
+      grammar: nextGrammar
+    })
   };
 };
-const doRule = (grid, rule, pos) => {
-  const loc = {
-    ...pos
+
+// if symbolFn returns true, then this bails out and returns false
+const genGrid = state => {
+  const locStack = [];
+  let loc = {
+    ...state.initialPosition
   };
-  for (let c of rule) {
+  let gridMap = {};
+  let dir = 'UP';
+  let i = 0;
+  for (let c of state.grammar) {
     switch (c) {
+      case '[':
+        locStack.push({
+          ...loc
+        });
+        break;
+      case ']':
+        loc = locStack.pop();
+        break;
       case '^':
+        dir = 'UP';
         loc.y -= 1;
         break;
       case 'V':
+        dir = 'DOWN';
         loc.y += 1;
         break;
       case '<':
+        dir = 'LEFT';
         loc.x -= 1;
         break;
       case '>':
+        dir = 'RIGHT';
         loc.x += 1;
         break;
       default:
-        if (loc.x >= 0 && loc.y >= 0 && loc.x < grid.length && loc.y < grid[loc.x].length) {
-          grid[loc.x][loc.y] = c;
+        const symbol = config.symbols[c];
+        const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
+        let nextDir = getNextDir(state.grammar, i);
+        if (nextDir) dir = nextDir;
+        if (symbol) {
+          gridMap[encodePosition(loc)] = {
+            index: i,
+            dir,
+            symbol: c,
+            isEnd
+          };
         }
     }
+    i++;
   }
-  return grid;
+  return gridMap;
+};
+const doSnip = (state, pos) => {
+  const symbol = state.gridMap[encodePosition(pos)];
+  if (!symbol) return state;
+  const index = symbol.index;
+  let nextGrammar = state.grammar.slice(0, index);
+  const parenLevel = getParenLevel(state.grammar, index);
+  let numOpens = parenLevel;
+  let endIndex = index;
+  while (endIndex < state.grammar.length) {
+    if (state.grammar[endIndex] == '[') numOpens++;
+    if (state.grammar[endIndex] == ']') numOpens--;
+    if (numOpens < parenLevel) {
+      nextGrammar += state.grammar.slice(endIndex);
+      break;
+    }
+    endIndex++;
+  }
+  return {
+    ...state,
+    grammar: nextGrammar,
+    gridMap: genGrid({
+      ...state,
+      grammar: nextGrammar
+    })
+  };
 };
 module.exports = {
-  tick
+  tick,
+  genGrid,
+  doSnip
 };
-},{"../utils":8,"bens_utils":39}],7:[function(require,module,exports){
+},{"../config":2,"../utils":8,"bens_utils":39}],7:[function(require,module,exports){
 const {
   config
 } = require('./config');
+const {
+  decodePosition
+} = require('bens_utils').helpers;
 const render = state => {
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext("2d");
   const {
     width,
     height,
     canvasMult
   } = config.gridSize;
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height; y++) {
-      if (!state.grid[x][y]) continue;
-      const {
-        color
-      } = config.symbols[state.grid[x][y]];
-      ctx.fillStyle = color;
-      ctx.fillRect(x * canvasMult, y * canvasMult, canvasMult, canvasMult);
+  const s = canvasMult;
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "steelblue";
+  ctx.fillRect(0, 0, width * canvasMult, height * canvasMult);
+  // ctx.globalAlpha = 0.7;
+
+  for (const p in state.gridMap) {
+    const sq = state.gridMap[p];
+    const symbol = config.symbols[sq.symbol];
+    const pos = decodePosition(p);
+    ctx.fillStyle = symbol.color;
+    ctx.fillRect(pos.x * s, pos.y * s, s, s);
+    ctx.strokeStyle = 'black';
+    ctx.beginPath();
+    if (sq.dir == 'UP') {
+      ctx.moveTo(pos.x * s, pos.y * s + s);
+      ctx.lineTo(pos.x * s, pos.y * s);
+      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s);
+      ctx.lineTo(pos.x * s + s, pos.y * s + s);
+    } else if (sq.dir == 'DOWN') {
+      ctx.moveTo(pos.x * s, pos.y * s);
+      ctx.lineTo(pos.x * s, pos.y * s + s);
+      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s + s);
+      ctx.lineTo(pos.x * s + s, pos.y * s);
+    } else if (sq.dir == 'RIGHT') {
+      ctx.moveTo(pos.x * s, pos.y * s);
+      ctx.lineTo(pos.x * s + s, pos.y * s);
+      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s + s);
+      ctx.lineTo(pos.x * s, pos.y * s + s);
+    } else if (sq.dir == 'LEFT') {
+      ctx.moveTo(pos.x * s + s, pos.y * s);
+      ctx.lineTo(pos.x * s, pos.y * s);
+      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      ctx[lineFn](pos.x * s, pos.y * s + s);
+      ctx.lineTo(pos.x * s + s, pos.y * s + s);
     }
+    ctx.stroke();
+    ctx.closePath();
   }
 };
 module.exports = {
   render
 };
-},{"./config":2}],8:[function(require,module,exports){
+},{"./config":2,"bens_utils":39}],8:[function(require,module,exports){
 const initGrid = (width, height, initial) => {
   const grid = [];
   for (let x = 0; x < width; x++) {
@@ -307,8 +454,26 @@ const initGrid = (width, height, initial) => {
   }
   return grid;
 };
+const getParenLevel = (grammar, index) => {
+  let numOpens = 0;
+  for (let i = 0; i < index; i++) {
+    if (grammar[i] == '[') numOpens++;
+    if (grammar[i] == ']') numOpens--;
+  }
+  return numOpens;
+};
+const getNextDir = (grammar, index) => {
+  if (grammar[index + 1] == '^') return 'UP';
+  if (grammar[index + 1] == 'V') return 'DOWN';
+  if (grammar[index + 1] == '<') return 'LEFT';
+  if (grammar[index + 1] == '>') return 'RIGHT';
+  if (grammar[index + 1] == ']') return false;
+  return false;
+};
 module.exports = {
-  initGrid
+  initGrid,
+  getParenLevel,
+  getNextDir
 };
 },{}],9:[function(require,module,exports){
 const React = require('react');

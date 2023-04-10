@@ -6,7 +6,7 @@ const config = {
     L: {color: 'green'},
     B: {color: 'green'},
   },
-  msPerTick: 500,
+  msPerTick: 1500,
 }
 
 module.exports = {
