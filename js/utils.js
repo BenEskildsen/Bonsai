@@ -21,6 +21,7 @@ const getParenLevel = (grammar, index) => {
 }
 
 const getNextDir = (grammar, index) => {
+  if (index >= grammar.length - 1) return false;
   if (grammar[index + 1] == '^') return 'UP';
   if (grammar[index + 1] == 'V') return 'DOWN';
   if (grammar[index + 1] == '<') return 'LEFT';

@@ -10,7 +10,6 @@ const tick = (state) => {
   state.time++;
 
   let nextGrammar = '';
-  let gridMap = state.gridMap;
   let i = 0;
   for (let c of state.grammar) {
     if (!state.rules[c]) {
@@ -59,11 +58,10 @@ const genGrid = (state) => {
         break;
       default:
         const symbol = config.symbols[c];
-        const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
+        // const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
         let nextDir = getNextDir(state.grammar, i);
-        if (nextDir) dir = nextDir;
         if (symbol) {
-          gridMap[encodePosition(loc)] = {index: i, dir, symbol: c, isEnd};
+          gridMap[encodePosition(loc)] = {index: i, dir, nextDir, symbol: c};
         }
     }
     i++

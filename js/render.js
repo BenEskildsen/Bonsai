@@ -25,28 +25,36 @@ const render = (state) => {
     ctx.beginPath();
     if (sq.dir == 'UP') {
       ctx.moveTo(pos.x * s, pos.y * s + s);
-      ctx.lineTo(pos.x * s, pos.y * s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s);
+      lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
-      ctx.lineTo(pos.x * s + s, pos.y * s + s);
+      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s + s);
     } else if (sq.dir == 'DOWN') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      ctx.lineTo(pos.x * s, pos.y * s + s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s + s);
+      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      ctx.lineTo(pos.x * s + s, pos.y * s);
+      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s);
     } else if (sq.dir == 'RIGHT') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      ctx.lineTo(pos.x * s + s, pos.y * s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s);
+      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      ctx.lineTo(pos.x * s, pos.y * s + s);
+      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s + s);
     } else if (sq.dir == 'LEFT') {
       ctx.moveTo(pos.x * s + s, pos.y * s);
-      ctx.lineTo(pos.x * s, pos.y * s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s);
+      lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
-      ctx.lineTo(pos.x * s + s, pos.y * s + s);
+      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s + s);
     }
     ctx.stroke();
     ctx.closePath();

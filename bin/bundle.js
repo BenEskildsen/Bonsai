@@ -82,16 +82,32 @@ const config = {
     T: {
       color: 'rgb(134,89,63)'
     },
+    // trunk
     D: {
       color: 'rgb(96,58,50)'
     },
+    // dead
     L: {
       color: 'green'
     },
+    // Left branch
+    R: {
+      color: 'green'
+    },
+    // Right branch
     B: {
       color: 'green'
-    }
+    },
+    // branch
+    F: {
+      color: 'green'
+    },
+    // leaf
+    S: {
+      color: 'green'
+    } // stable leaf
   },
+
   msPerTick: 1500
 };
 module.exports = {
@@ -192,49 +208,90 @@ const initState = () => {
     time: 0,
     rules: {
       'B': [{
-        rule: 'T^T^B',
+        rule: 'T^B',
         weight: 8
-      },
-      // {rule: 'T^T<B', weight: 4},
-      // {rule: 'T>T^B', weight: 4},
-      // {rule: 'T>T>B', weight: 5},
-      {
-        rule: 'T<T<B',
+      }, {
+        rule: 'T<L',
         weight: 5
       }, {
-        rule: 'T>T>B',
+        rule: 'T>R',
         weight: 5
       }, {
-        rule: 'T^[<B]T[>B]',
-        weight: 5
+        rule: 'T^[<L]T[>R]',
+        weight: 10
+      }, {
+        rule: 'F',
+        weight: 2
+      }],
+      'F': [{
+        rule: 'F',
+        weight: 20
+      }, {
+        rule: 'S^S>SVSVS<S<S^S^F',
+        weight: 1
+      }, {
+        rule: 'SVS<S^S^S>S>SVSVF',
+        weight: 1
       }
-      // {rule: 'L^L>L<<L', weight: 5},
+      // {rule: 'S>F', weight: 2},
+      // {rule: 'S<F', weight: 2},
+      // {rule: 'S^F', weight: 2},
+      // {rule: 'SVF', weight: 1},
       ],
 
+      'S': [{
+        rule: 'S',
+        weight: 100
+      }
+      // {rule: 'B', weight: 1},
+      ],
+
+      'T': [{
+        rule: 'T',
+        weight: 1000
+      }, {
+        rule: 'B',
+        weight: 1
+      }],
+      'L': [{
+        rule: 'T^L',
+        weight: 3
+      }, {
+        rule: 'T^B',
+        weight: 5
+      }, {
+        rule: 'T<L',
+        weight: 8
+      }, {
+        rule: 'F',
+        weight: 2
+      }],
+      'R': [{
+        rule: 'T^B',
+        weight: 3
+      }, {
+        rule: 'T^R',
+        weight: 5
+      }, {
+        rule: 'T>R',
+        weight: 8
+      }, {
+        rule: 'F',
+        weight: 2
+      }],
       'D': [{
         rule: 'D',
         weight: 1
-      }],
-      'T': [{
-        rule: 'T',
-        weight: 50
-      }],
-      'L': [{
-        rule: 'L',
-        weight: 20
-      }, {
-        rule: 'B',
-        weight: 2
       }]
     },
     grammar: 'B',
     initialPosition: {
-      x: 25,
+      x: 30,
       y: 35
     },
     gridMap: {
       [encodePosition({
-        x: 25,
+        x: 30,
         y: 35
       })]: {
         index: 0,
@@ -276,7 +333,6 @@ const tick = state => {
   } = state;
   state.time++;
   let nextGrammar = '';
-  let gridMap = state.gridMap;
   let i = 0;
   for (let c of state.grammar) {
     if (!state.rules[c]) {
@@ -335,15 +391,14 @@ const genGrid = state => {
         break;
       default:
         const symbol = config.symbols[c];
-        const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
+        // const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
         let nextDir = getNextDir(state.grammar, i);
-        if (nextDir) dir = nextDir;
         if (symbol) {
           gridMap[encodePosition(loc)] = {
             index: i,
             dir,
-            symbol: c,
-            isEnd
+            nextDir,
+            symbol: c
           };
         }
     }
@@ -412,28 +467,36 @@ const render = state => {
     ctx.beginPath();
     if (sq.dir == 'UP') {
       ctx.moveTo(pos.x * s, pos.y * s + s);
-      ctx.lineTo(pos.x * s, pos.y * s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s);
+      lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
-      ctx.lineTo(pos.x * s + s, pos.y * s + s);
+      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s + s);
     } else if (sq.dir == 'DOWN') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      ctx.lineTo(pos.x * s, pos.y * s + s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s + s);
+      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      ctx.lineTo(pos.x * s + s, pos.y * s);
+      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s);
     } else if (sq.dir == 'RIGHT') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      ctx.lineTo(pos.x * s + s, pos.y * s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s);
+      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      ctx.lineTo(pos.x * s, pos.y * s + s);
+      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s + s);
     } else if (sq.dir == 'LEFT') {
       ctx.moveTo(pos.x * s + s, pos.y * s);
-      ctx.lineTo(pos.x * s, pos.y * s);
-      let lineFn = sq.isEnd ? 'lineTo' : 'moveTo';
+      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s, pos.y * s);
+      lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
-      ctx.lineTo(pos.x * s + s, pos.y * s + s);
+      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      ctx[lineFn](pos.x * s + s, pos.y * s + s);
     }
     ctx.stroke();
     ctx.closePath();
@@ -463,6 +526,7 @@ const getParenLevel = (grammar, index) => {
   return numOpens;
 };
 const getNextDir = (grammar, index) => {
+  if (index >= grammar.length - 1) return false;
   if (grammar[index + 1] == '^') return 'UP';
   if (grammar[index + 1] == 'V') return 'DOWN';
   if (grammar[index + 1] == '<') return 'LEFT';

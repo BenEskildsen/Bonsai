@@ -1,13 +1,18 @@
 
-  - grows back on itself way to readily
-  - tune rules so that something can always grow
-
   - hosting:
     - move reducer to itch
     - add client handling
 
+  - some kind of memory leak of grammar?
+    - growing off the screen
+
+  - some cuts don't appear to do anything
+    - perhaps keep cutting as long as there is somethign there?
+
+  - rules:
+    - grow down sometimes?
+
   - aesthetics
-    - better tracking of paths of branches
+    - nextDir should be an array
     - better colors
     - wind
-    - music?

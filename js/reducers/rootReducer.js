@@ -45,29 +45,44 @@ const initState = () => {
     time: 0,
     rules: {
       'B': [
-        {rule: 'T^T^B', weight: 8},
-        // {rule: 'T^T<B', weight: 4},
-        // {rule: 'T>T^B', weight: 4},
-        // {rule: 'T>T>B', weight: 5},
-        {rule: 'T<T<B', weight: 5},
-        {rule: 'T>T>B', weight: 5},
-        {rule: 'T^[<B]T[>B]', weight: 5},
-        // {rule: 'L^L>L<<L', weight: 5},
+        {rule: 'T^B', weight: 8},
+        {rule: 'T<L', weight: 5},
+        {rule: 'T>R', weight: 5},
+        {rule: 'T^[<L]T[>R]', weight: 10},
+        {rule: 'F', weight: 2},
+      ],
+      'F': [
+        {rule: 'F', weight: 20},
+        {rule: 'S^S>SVSVS<S<S^S^F', weight: 1},
+        {rule: 'SVS<S^S^S>S>SVSVF', weight: 1},
+      ],
+      'S': [
+        {rule: 'S', weight: 100},
+        // {rule: 'B', weight: 1},
+      ],
+      'T': [
+        {rule: 'T', weight: 1000},
+        {rule: 'B', weight: 1},
+      ],
+      'L': [
+        {rule: 'T^L', weight: 3},
+        {rule: 'T^B', weight: 5},
+        {rule: 'T<L', weight: 8},
+        {rule: 'F', weight: 2},
+      ],
+      'R': [
+        {rule: 'T^B', weight: 3},
+        {rule: 'T^R', weight: 5},
+        {rule: 'T>R', weight: 8},
+        {rule: 'F', weight: 2},
       ],
       'D': [
         {rule: 'D', weight: 1},
       ],
-      'T': [
-        {rule: 'T', weight: 50},
-      ],
-      'L': [
-        {rule: 'L', weight: 20},
-        {rule: 'B', weight: 2},
-      ],
     },
     grammar: 'B',
-    initialPosition: {x: 25, y: 35},
-    gridMap: {[encodePosition({x: 25, y: 35})]: {index: 0, dir: 'UP', symbol: 'B', isEnd: true}},
+    initialPosition: {x: 30, y: 35},
+    gridMap: {[encodePosition({x: 30, y: 35})]: {index: 0, dir: 'UP', symbol: 'B', isEnd: true}},
   };
 
   return state;
