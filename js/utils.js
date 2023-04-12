@@ -30,9 +30,30 @@ const getNextDir = (grammar, index) => {
   return false;
 }
 
+const encodeGrammar = (grammar) => {
+  let encodedGrammar = '';
+  for (let c of grammar) {
+    if (c == '^') {
+      encodedGrammar += 'Z';
+    } else if (c == '>') {
+      encodedGrammar += 'Y';
+    } else if (c == '<') {
+      encodedGrammar += 'X';
+    } else if (c == '[') {
+      encodedGrammar += 'W';
+    } else if (c == ']') {
+      encodedGrammar += 'U';
+    } else {
+      encodedGrammar += c;
+    }
+  }
+  return encodedGrammar;
+}
+
 module.exports = {
   initGrid,
   getParenLevel,
   getNextDir,
+  encodeGrammar,
 };
 

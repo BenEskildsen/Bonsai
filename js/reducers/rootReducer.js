@@ -1,7 +1,7 @@
 
 const {modalReducer} = require('./modalReducer');
 const {config} = require('../config');
-const {tick, doSnip} = require('./tick');
+const {tick, doSnip, genGrid} = require('./tick');
 const {encodePosition} = require('bens_utils').helpers;
 
 const rootReducer = (state, action) => {
@@ -26,6 +26,10 @@ const rootReducer = (state, action) => {
       clearInterval(state.tickInterval);
       state.tickInterval = null;
       return state;
+    case 'SET_GRAMMAR': {
+      const nextState = {...state, ...action};
+      return {...nextState, gridMap: genGrid(nextState.initialPosition, nextState.grammar)};
+    }
     case 'TICK': {
       return tick(state);
     }
@@ -81,8 +85,8 @@ const initState = () => {
       ],
     },
     grammar: 'B',
-    initialPosition: {x: 30, y: 35},
-    gridMap: {[encodePosition({x: 30, y: 35})]: {index: 0, dir: 'UP', symbol: 'B', isEnd: true}},
+    initialPosition: {x: 30, y: 39},
+    gridMap: {[encodePosition({x: 30, y: 39})]: {index: 0, dir: 'UP', symbol: 'B', isEnd: true}},
   };
 
   return state;

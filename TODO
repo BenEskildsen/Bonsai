@@ -1,7 +1,8 @@
 
-  - hosting:
-    - move reducer to itch
-    - add client handling
+  - UI
+    - instructions for snip once per day
+    - show different mouse when snip allowed vs not?
+    - Bonsai Aesthetic notes
 
   - some kind of memory leak of grammar?
     - growing off the screen

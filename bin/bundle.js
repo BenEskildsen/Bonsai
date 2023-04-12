@@ -71,7 +71,135 @@ function Main(props) {
   return /*#__PURE__*/React.createElement(React.Fragment, null, content, state.modal);
 }
 module.exports = Main;
-},{"../config":2,"../reducers/rootReducer":5,"../render":7,"bens_ui_components":32,"bens_utils":39,"react":47}],2:[function(require,module,exports){
+},{"../config":3,"../reducers/rootReducer":6,"../render":8,"bens_ui_components":33,"bens_utils":40,"react":48}],2:[function(require,module,exports){
+const React = require('react');
+const {
+  Button,
+  Modal,
+  Canvas,
+  useMouseHandler
+} = require('bens_ui_components');
+const {
+  useEnhancedReducer
+} = require('bens_ui_components');
+const {
+  config
+} = require('../config');
+const {
+  render
+} = require('../render');
+const {
+  floor
+} = require('bens_utils').vectors;
+const {
+  rootReducer,
+  initState
+} = require('../reducers/rootReducer');
+const {
+  doSnip
+} = require('../reducers/tick');
+const {
+  encodePosition
+} = require('bens_utils').helpers;
+const {
+  encodeGrammar
+} = require('../utils');
+const {
+  useEffect,
+  useState,
+  useMemo
+} = React;
+const normalizePos = (pos, worldSize, canvasSize) => {
+  return {
+    x: pos.x * worldSize.width / canvasSize.width,
+    y: pos.y * worldSize.height / canvasSize.height
+  };
+};
+function ValMain(props) {
+  const [state, dispatch, getState] = useEnhancedReducer(rootReducer, initState());
+  window.getState = getState;
+  window.dispatch = dispatch;
+  const [cursor, setCursor] = useState('pointer');
+
+  // establish client ID
+  useEffect(() => {
+    const clientID = parseInt(localStorage.getItem("bonsaiClientID"));
+    if (clientID != null) {
+      dispatch({
+        clientID
+      });
+    } else {
+      fetch("https://api.val.town/eval/@beneskildsen.getClientID()").then(res => res.json()).then(res => {
+        localStorage.setItem("bonsaiClientID", res.data);
+        dispatch({
+          clientID: res.data
+        });
+      });
+    }
+  }, []);
+
+  // fetch val grammar
+  useEffect(() => {
+    fetch("https://api.val.town/eval/@beneskildsen.getBonsaiState()").then(res => res.json()).then(res => {
+      if (res.data.snips[getState().clientID]) setCursor('not-allowed');
+      dispatch({
+        type: 'SET_GRAMMAR',
+        ...res.data
+      });
+    });
+  }, []);
+
+  // render on updates
+  useEffect(() => {
+    render(getState());
+  }, [state.time, state.grammar, state.gridMap]);
+
+  // mouse handling for snipping
+  useMouseHandler("canvas", {
+    dispatch,
+    getState
+  }, {
+    leftDown: (state, dispatch, p) => {
+      const pos = floor(normalizePos(p, {
+        width: config.gridSize.width,
+        height: config.gridSize.height
+      }, {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }));
+      if (!state.gridMap[encodePosition(pos)]) return;
+      if (!state.clientID) return;
+      if (state.snips[state.clientID] && state.clientID != 1) return;
+      // do the snip on the clientside to save compute
+      const {
+        grammar
+      } = doSnip({
+        ...state
+      }, pos);
+      setCursor("wait");
+      const args = `(${pos.x},${pos.y},${state.clientID},"${encodeGrammar(grammar)}")`;
+      fetch('https://api.val.town/eval/@beneskildsen.snip' + args).then(res => res.json()).then(res => {
+        console.log(res.data);
+        setCursor("not-allowed");
+        dispatch({
+          type: 'SET_GRAMMAR',
+          ...res.data
+        });
+      });
+    }
+  });
+  let content = /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Canvas, {
+    style: {
+      cursor
+    },
+    useFullScreen: true,
+    width: config.gridSize.width * config.gridSize.canvasMult,
+    height: config.gridSize.height * config.gridSize.canvasMult
+  }));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, content, state.modal);
+}
+module.exports = ValMain;
+},{"../config":3,"../reducers/rootReducer":6,"../reducers/tick":7,"../render":8,"../utils":9,"bens_ui_components":33,"bens_utils":40,"react":48}],3:[function(require,module,exports){
 const config = {
   gridSize: {
     width: 60,
@@ -105,7 +233,7 @@ const config = {
     // leaf
     S: {
       color: 'green'
-    } // stable leaf
+    } // Stem leaf
   },
 
   msPerTick: 1500
@@ -113,20 +241,21 @@ const config = {
 module.exports = {
   config
 };
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 "use strict";
 
 var _Main = _interopRequireDefault(require("./UI/Main.react"));
+var _ValMain = _interopRequireDefault(require("./UI/ValMain.react"));
 var _react = _interopRequireDefault(require("react"));
 var _client = _interopRequireDefault(require("react-dom/client"));
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 function renderUI(root) {
-  root.render( /*#__PURE__*/_react.default.createElement(_Main.default, null));
+  root.render( /*#__PURE__*/_react.default.createElement(_ValMain.default, null));
 }
 const root = _client.default.createRoot(document.getElementById('container'));
 renderUI(root);
 
-},{"./UI/Main.react":1,"react":47,"react-dom/client":43}],4:[function(require,module,exports){
+},{"./UI/Main.react":1,"./UI/ValMain.react":2,"react":48,"react-dom/client":44}],5:[function(require,module,exports){
 const modalReducer = (state, action) => {
   switch (action.type) {
     case 'DISMISS_MODAL':
@@ -150,7 +279,7 @@ const modalReducer = (state, action) => {
 module.exports = {
   modalReducer
 };
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 const {
   modalReducer
 } = require('./modalReducer');
@@ -159,7 +288,8 @@ const {
 } = require('../config');
 const {
   tick,
-  doSnip
+  doSnip,
+  genGrid
 } = require('./tick');
 const {
   encodePosition
@@ -186,6 +316,17 @@ const rootReducer = (state, action) => {
       clearInterval(state.tickInterval);
       state.tickInterval = null;
       return state;
+    case 'SET_GRAMMAR':
+      {
+        const nextState = {
+          ...state,
+          ...action
+        };
+        return {
+          ...nextState,
+          gridMap: genGrid(nextState.initialPosition, nextState.grammar)
+        };
+      }
     case 'TICK':
       {
         return tick(state);
@@ -232,13 +373,7 @@ const initState = () => {
       }, {
         rule: 'SVS<S^S^S>S>SVSVF',
         weight: 1
-      }
-      // {rule: 'S>F', weight: 2},
-      // {rule: 'S<F', weight: 2},
-      // {rule: 'S^F', weight: 2},
-      // {rule: 'SVF', weight: 1},
-      ],
-
+      }],
       'S': [{
         rule: 'S',
         weight: 100
@@ -287,12 +422,12 @@ const initState = () => {
     grammar: 'B',
     initialPosition: {
       x: 30,
-      y: 35
+      y: 39
     },
     gridMap: {
       [encodePosition({
         x: 30,
-        y: 35
+        y: 39
       })]: {
         index: 0,
         dir: 'UP',
@@ -307,7 +442,7 @@ module.exports = {
   rootReducer,
   initState
 };
-},{"../config":2,"./modalReducer":4,"./tick":6,"bens_utils":39}],6:[function(require,module,exports){
+},{"../config":3,"./modalReducer":5,"./tick":7,"bens_utils":40}],7:[function(require,module,exports){
 const {
   initGrid
 } = require('../utils');
@@ -347,23 +482,18 @@ const tick = state => {
   return {
     ...state,
     grammar: nextGrammar,
-    gridMap: genGrid({
-      ...state,
-      grammar: nextGrammar
-    })
+    gridMap: genGrid(state.initialPosition, nextGrammar)
   };
 };
-
-// if symbolFn returns true, then this bails out and returns false
-const genGrid = state => {
+const genGrid = (initialPosition, grammar) => {
   const locStack = [];
   let loc = {
-    ...state.initialPosition
+    ...initialPosition
   };
   let gridMap = {};
   let dir = 'UP';
   let i = 0;
-  for (let c of state.grammar) {
+  for (let c of grammar) {
     switch (c) {
       case '[':
         locStack.push({
@@ -391,8 +521,7 @@ const genGrid = state => {
         break;
       default:
         const symbol = config.symbols[c];
-        // const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
-        let nextDir = getNextDir(state.grammar, i);
+        let nextDir = getNextDir(grammar, i);
         if (symbol) {
           gridMap[encodePosition(loc)] = {
             index: i,
@@ -426,10 +555,7 @@ const doSnip = (state, pos) => {
   return {
     ...state,
     grammar: nextGrammar,
-    gridMap: genGrid({
-      ...state,
-      grammar: nextGrammar
-    })
+    gridMap: genGrid(state.initialPosition, nextGrammar)
   };
 };
 module.exports = {
@@ -437,7 +563,7 @@ module.exports = {
   genGrid,
   doSnip
 };
-},{"../config":2,"../utils":8,"bens_utils":39}],7:[function(require,module,exports){
+},{"../config":3,"../utils":9,"bens_utils":40}],8:[function(require,module,exports){
 const {
   config
 } = require('./config');
@@ -505,7 +631,7 @@ const render = state => {
 module.exports = {
   render
 };
-},{"./config":2,"bens_utils":39}],8:[function(require,module,exports){
+},{"./config":3,"bens_utils":40}],9:[function(require,module,exports){
 const initGrid = (width, height, initial) => {
   const grid = [];
   for (let x = 0; x < width; x++) {
@@ -534,12 +660,32 @@ const getNextDir = (grammar, index) => {
   if (grammar[index + 1] == ']') return false;
   return false;
 };
+const encodeGrammar = grammar => {
+  let encodedGrammar = '';
+  for (let c of grammar) {
+    if (c == '^') {
+      encodedGrammar += 'Z';
+    } else if (c == '>') {
+      encodedGrammar += 'Y';
+    } else if (c == '<') {
+      encodedGrammar += 'X';
+    } else if (c == '[') {
+      encodedGrammar += 'W';
+    } else if (c == ']') {
+      encodedGrammar += 'U';
+    } else {
+      encodedGrammar += c;
+    }
+  }
+  return encodedGrammar;
+};
 module.exports = {
   initGrid,
   getParenLevel,
-  getNextDir
+  getNextDir,
+  encodeGrammar
 };
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 const React = require('react');
 const Button = require('./Button.react');
 const {
@@ -612,7 +758,7 @@ const AudioWidget = props => {
   }));
 };
 module.exports = AudioWidget;
-},{"./Button.react":11,"react":47}],10:[function(require,module,exports){
+},{"./Button.react":12,"react":48}],11:[function(require,module,exports){
 function _extends() { _extends = Object.assign ? Object.assign.bind() : function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
 const React = require('react');
 const CheckerBackground = require('./CheckerBackground.react.js');
@@ -731,7 +877,7 @@ const Piece = props => {
   }, props.sprite);
 };
 module.exports = Board;
-},{"./CheckerBackground.react.js":14,"./DragArea.react.js":16,"react":47}],11:[function(require,module,exports){
+},{"./CheckerBackground.react.js":15,"./DragArea.react.js":17,"react":48}],12:[function(require,module,exports){
 const React = require('react');
 const {
   useState,
@@ -821,7 +967,7 @@ function Button(props) {
   }, props.label, hoverDisplay);
 }
 module.exports = Button;
-},{"react":47}],12:[function(require,module,exports){
+},{"react":48}],13:[function(require,module,exports){
 const React = require('react');
 const {
   useResponsiveDimensions
@@ -884,7 +1030,7 @@ function Canvas(props) {
   }));
 }
 module.exports = Canvas;
-},{"./hooks":30,"react":47}],13:[function(require,module,exports){
+},{"./hooks":31,"react":48}],14:[function(require,module,exports){
 const React = require('react');
 
 /**
@@ -920,7 +1066,7 @@ function Checkbox(props) {
   }
 }
 module.exports = Checkbox;
-},{"react":47}],14:[function(require,module,exports){
+},{"react":48}],15:[function(require,module,exports){
 const React = require('react');
 
 /**
@@ -968,7 +1114,7 @@ const CheckerBackground = props => {
   }, squares);
 };
 module.exports = CheckerBackground;
-},{"react":47}],15:[function(require,module,exports){
+},{"react":48}],16:[function(require,module,exports){
 const React = require('react');
 function Divider(props) {
   const {
@@ -984,7 +1130,7 @@ function Divider(props) {
   });
 }
 module.exports = Divider;
-},{"react":47}],16:[function(require,module,exports){
+},{"react":48}],17:[function(require,module,exports){
 const React = require('react');
 const {
   useMouseHandler,
@@ -1244,7 +1390,7 @@ const clampToArea = (dragAreaID, pixel, style) => {
   };
 };
 module.exports = DragArea;
-},{"./hooks":30,"bens_utils":39,"react":47}],17:[function(require,module,exports){
+},{"./hooks":31,"bens_utils":40,"react":48}],18:[function(require,module,exports){
 const React = require('react');
 
 /**
@@ -1282,7 +1428,7 @@ const Dropdown = function (props) {
   }, optionTags);
 };
 module.exports = Dropdown;
-},{"react":47}],18:[function(require,module,exports){
+},{"react":48}],19:[function(require,module,exports){
 const React = require('react');
 const {
   useEffect,
@@ -1328,7 +1474,7 @@ const usePrevious = value => {
   return ref.current;
 };
 module.exports = Indicator;
-},{"react":47}],19:[function(require,module,exports){
+},{"react":48}],20:[function(require,module,exports){
 const React = require('react');
 const InfoCard = props => {
   const overrideStyle = props.style || {};
@@ -1352,7 +1498,7 @@ const InfoCard = props => {
   }, props.children);
 };
 module.exports = InfoCard;
-},{"react":47}],20:[function(require,module,exports){
+},{"react":48}],21:[function(require,module,exports){
 const React = require('react');
 const Button = require('./Button.react');
 const Divider = require('./Divider.react');
@@ -1445,7 +1591,7 @@ function Modal(props) {
   }, buttonHTML)));
 }
 module.exports = Modal;
-},{"./Button.react":11,"./Divider.react":15,"react":47}],21:[function(require,module,exports){
+},{"./Button.react":12,"./Divider.react":16,"react":48}],22:[function(require,module,exports){
 const React = require('react');
 const {
   useState,
@@ -1527,7 +1673,7 @@ const submitValue = (onChange, nextVal, onlyInt) => {
   }
 };
 module.exports = NumberField;
-},{"react":47}],22:[function(require,module,exports){
+},{"react":48}],23:[function(require,module,exports){
 function _extends() { _extends = Object.assign ? Object.assign.bind() : function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
 /**
  * See ~/Code/teaching/clusters for an example of how to use the plot
@@ -1815,7 +1961,7 @@ const PlotWatcher = props => {
   }));
 };
 module.exports = PlotWatcher;
-},{"./Button.react":11,"./Canvas.react":12,"react":47}],23:[function(require,module,exports){
+},{"./Button.react":12,"./Canvas.react":13,"react":48}],24:[function(require,module,exports){
 const React = require('react');
 const Button = require('./Button.react');
 const Modal = require('./Modal.react');
@@ -1898,7 +2044,7 @@ const quitGameModal = dispatch => {
   });
 };
 module.exports = QuitButton;
-},{"./Button.react":11,"./Modal.react":20,"bens_utils":39,"react":47}],24:[function(require,module,exports){
+},{"./Button.react":12,"./Modal.react":21,"bens_utils":40,"react":48}],25:[function(require,module,exports){
 const React = require('react');
 
 // props:
@@ -1931,7 +2077,7 @@ class RadioPicker extends React.Component {
   }
 }
 module.exports = RadioPicker;
-},{"react":47}],25:[function(require,module,exports){
+},{"react":48}],26:[function(require,module,exports){
 const React = require('react');
 const NumberField = require('./NumberField.react');
 const {
@@ -2008,7 +2154,7 @@ function Slider(props) {
   }), props.noOriginalValue ? null : "(" + originalValue + ")"));
 }
 module.exports = Slider;
-},{"./NumberField.react":21,"react":47}],26:[function(require,module,exports){
+},{"./NumberField.react":22,"react":48}],27:[function(require,module,exports){
 const React = require('react');
 
 /**
@@ -2052,7 +2198,7 @@ const SpriteSheet = props => {
   }));
 };
 module.exports = SpriteSheet;
-},{"react":47}],27:[function(require,module,exports){
+},{"react":48}],28:[function(require,module,exports){
 const React = require('react');
 const Button = require('./Button.react');
 const Dropdown = require('./Dropdown.react');
@@ -2239,7 +2385,7 @@ function Table(props) {
   }, props.hideNumRows ? null : /*#__PURE__*/React.createElement("span", null, "Total Rows: ", rows.length, " Rows Displayed: ", filteredRows.length), /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, headers)), /*#__PURE__*/React.createElement("tbody", null, rowHTML)));
 }
 module.exports = Table;
-},{"./Button.react":11,"./Dropdown.react":17,"react":47}],28:[function(require,module,exports){
+},{"./Button.react":12,"./Dropdown.react":18,"react":48}],29:[function(require,module,exports){
 const React = require('react');
 
 /**
@@ -2287,7 +2433,7 @@ const TextArea = props => {
   });
 };
 module.exports = TextArea;
-},{"react":47}],29:[function(require,module,exports){
+},{"react":48}],30:[function(require,module,exports){
 const React = require('react');
 
 /**
@@ -2329,7 +2475,7 @@ const TextField = props => {
   });
 };
 module.exports = TextField;
-},{"react":47}],30:[function(require,module,exports){
+},{"react":48}],31:[function(require,module,exports){
 const React = require('react');
 const {
   throttle
@@ -2820,7 +2966,7 @@ module.exports = {
   useCompare,
   usePrevious
 };
-},{"bens_utils":39,"react":47}],31:[function(require,module,exports){
+},{"bens_utils":40,"react":48}],32:[function(require,module,exports){
 // type Point = {
 //   x: number,
 //   y: number,
@@ -2905,7 +3051,7 @@ const plotReducer = (state, action) => {
 module.exports = {
   plotReducer
 };
-},{}],32:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 
 // const React = require('react');
 // const ReactDOM = require('react-dom');
@@ -2940,7 +3086,7 @@ module.exports = {
 
 
 
-},{"./bin/AudioWidget.react.js":9,"./bin/Board.react.js":10,"./bin/Button.react.js":11,"./bin/Canvas.react.js":12,"./bin/Checkbox.react.js":13,"./bin/CheckerBackground.react.js":14,"./bin/Divider.react.js":15,"./bin/DragArea.react.js":16,"./bin/Dropdown.react.js":17,"./bin/Indicator.react.js":18,"./bin/InfoCard.react.js":19,"./bin/Modal.react.js":20,"./bin/NumberField.react.js":21,"./bin/Plot.react.js":22,"./bin/QuitButton.react.js":23,"./bin/RadioPicker.react.js":24,"./bin/Slider.react.js":25,"./bin/SpriteSheet.react.js":26,"./bin/Table.react.js":27,"./bin/TextArea.react.js":28,"./bin/TextField.react.js":29,"./bin/hooks.js":30,"./bin/plotReducer.js":31}],33:[function(require,module,exports){
+},{"./bin/AudioWidget.react.js":10,"./bin/Board.react.js":11,"./bin/Button.react.js":12,"./bin/Canvas.react.js":13,"./bin/Checkbox.react.js":14,"./bin/CheckerBackground.react.js":15,"./bin/Divider.react.js":16,"./bin/DragArea.react.js":17,"./bin/Dropdown.react.js":18,"./bin/Indicator.react.js":19,"./bin/InfoCard.react.js":20,"./bin/Modal.react.js":21,"./bin/NumberField.react.js":22,"./bin/Plot.react.js":23,"./bin/QuitButton.react.js":24,"./bin/RadioPicker.react.js":25,"./bin/Slider.react.js":26,"./bin/SpriteSheet.react.js":27,"./bin/Table.react.js":28,"./bin/TextArea.react.js":29,"./bin/TextField.react.js":30,"./bin/hooks.js":31,"./bin/plotReducer.js":32}],34:[function(require,module,exports){
 'use strict';
 
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
@@ -3104,7 +3250,7 @@ module.exports = {
   getEntityPositions: getEntityPositions,
   entityInsideGrid: entityInsideGrid
 };
-},{"./helpers":34,"./math":35,"./vectors":38}],34:[function(require,module,exports){
+},{"./helpers":35,"./math":36,"./vectors":39}],35:[function(require,module,exports){
 'use strict';
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
@@ -3268,7 +3414,7 @@ module.exports = {
   deepCopy: deepCopy,
   throttle: throttle, debounce: debounce
 };
-},{"./vectors":38}],35:[function(require,module,exports){
+},{"./vectors":39}],36:[function(require,module,exports){
 "use strict";
 
 var clamp = function clamp(val, min, max) {
@@ -3313,7 +3459,7 @@ module.exports = {
   clamp: clamp,
   subtractWithDeficit: subtractWithDeficit
 };
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 'use strict';
 
 function isIpad() {
@@ -3344,7 +3490,7 @@ module.exports = {
   isMobile: isMobile,
   isPhone: isPhone
 };
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 "use strict";
 
 var floor = Math.floor,
@@ -3399,7 +3545,7 @@ module.exports = {
   oneOf: oneOf,
   weightedOneOf: weightedOneOf
 };
-},{}],38:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 "use strict";
 
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
@@ -3598,7 +3744,7 @@ module.exports = {
   rotate: rotate,
   abs: abs
 };
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 
 module.exports = {
   vectors: require('./bin/vectors'),
@@ -3609,7 +3755,7 @@ module.exports = {
   math: require('./bin/math'),
 }
 
-},{"./bin/gridHelpers":33,"./bin/helpers":34,"./bin/math":35,"./bin/platform":36,"./bin/stochastic":37,"./bin/vectors":38}],40:[function(require,module,exports){
+},{"./bin/gridHelpers":34,"./bin/helpers":35,"./bin/math":36,"./bin/platform":37,"./bin/stochastic":38,"./bin/vectors":39}],41:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -3795,7 +3941,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 (function (process){(function (){
 /**
  * @license React
@@ -8750,7 +8896,7 @@ if(/^(https?|file):$/.test(protocol)){// eslint-disable-next-line react-internal
 console.info('%cDownload the React DevTools '+'for a better development experience: '+'https://reactjs.org/link/react-devtools'+(protocol==='file:'?'\nYou might need to use a local HTTP server (instead of file://): '+'https://reactjs.org/link/react-devtools-faq':''),'font-weight:bold');}}}}exports.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED=Internals;exports.createPortal=createPortal$1;exports.createRoot=createRoot$1;exports.findDOMNode=findDOMNode;exports.flushSync=flushSync$1;exports.hydrate=hydrate;exports.hydrateRoot=hydrateRoot$1;exports.render=render;exports.unmountComponentAtNode=unmountComponentAtNode;exports.unstable_batchedUpdates=batchedUpdates$1;exports.unstable_renderSubtreeIntoContainer=renderSubtreeIntoContainer;exports.version=ReactVersion;/* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */if(typeof __REACT_DEVTOOLS_GLOBAL_HOOK__!=='undefined'&&typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop==='function'){__REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(new Error());}})();}
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":40,"react":47,"scheduler":50}],42:[function(require,module,exports){
+},{"_process":41,"react":48,"scheduler":51}],43:[function(require,module,exports){
 /**
  * @license React
  * react-dom.production.min.js
@@ -9075,7 +9221,7 @@ exports.hydrateRoot=function(a,b,c){if(!ol(a))throw Error(p(405));var d=null!=c&
 e);return new nl(b)};exports.render=function(a,b,c){if(!pl(b))throw Error(p(200));return sl(null,a,b,!1,c)};exports.unmountComponentAtNode=function(a){if(!pl(a))throw Error(p(40));return a._reactRootContainer?(Sk(function(){sl(null,null,a,!1,function(){a._reactRootContainer=null;a[uf]=null})}),!0):!1};exports.unstable_batchedUpdates=Rk;
 exports.unstable_renderSubtreeIntoContainer=function(a,b,c,d){if(!pl(c))throw Error(p(200));if(null==a||void 0===a._reactInternals)throw Error(p(38));return sl(a,b,c,!1,d)};exports.version="18.2.0-next-9e3b772b8-20220608";
 
-},{"react":47,"scheduler":50}],43:[function(require,module,exports){
+},{"react":48,"scheduler":51}],44:[function(require,module,exports){
 (function (process){(function (){
 'use strict';
 
@@ -9104,7 +9250,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":40,"react-dom":44}],44:[function(require,module,exports){
+},{"_process":41,"react-dom":45}],45:[function(require,module,exports){
 (function (process){(function (){
 'use strict';
 
@@ -9146,7 +9292,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"./cjs/react-dom.development.js":41,"./cjs/react-dom.production.min.js":42,"_process":40}],45:[function(require,module,exports){
+},{"./cjs/react-dom.development.js":42,"./cjs/react-dom.production.min.js":43,"_process":41}],46:[function(require,module,exports){
 (function (process){(function (){
 /**
  * @license React
@@ -11551,7 +11697,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":40}],46:[function(require,module,exports){
+},{"_process":41}],47:[function(require,module,exports){
 /**
  * @license React
  * react.production.min.js
@@ -11579,7 +11725,7 @@ exports.useCallback=function(a,b){return U.current.useCallback(a,b)};exports.use
 exports.useInsertionEffect=function(a,b){return U.current.useInsertionEffect(a,b)};exports.useLayoutEffect=function(a,b){return U.current.useLayoutEffect(a,b)};exports.useMemo=function(a,b){return U.current.useMemo(a,b)};exports.useReducer=function(a,b,e){return U.current.useReducer(a,b,e)};exports.useRef=function(a){return U.current.useRef(a)};exports.useState=function(a){return U.current.useState(a)};exports.useSyncExternalStore=function(a,b,e){return U.current.useSyncExternalStore(a,b,e)};
 exports.useTransition=function(){return U.current.useTransition()};exports.version="18.2.0";
 
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 (function (process){(function (){
 'use strict';
 
@@ -11590,7 +11736,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"./cjs/react.development.js":45,"./cjs/react.production.min.js":46,"_process":40}],48:[function(require,module,exports){
+},{"./cjs/react.development.js":46,"./cjs/react.production.min.js":47,"_process":41}],49:[function(require,module,exports){
 (function (process,setImmediate){(function (){
 /**
  * @license React
@@ -12228,7 +12374,7 @@ if (
 }
 
 }).call(this)}).call(this,require('_process'),require("timers").setImmediate)
-},{"_process":40,"timers":51}],49:[function(require,module,exports){
+},{"_process":41,"timers":52}],50:[function(require,module,exports){
 (function (setImmediate){(function (){
 /**
  * @license React
@@ -12251,7 +12397,7 @@ exports.unstable_scheduleCallback=function(a,b,c){var d=exports.unstable_now();"
 exports.unstable_shouldYield=M;exports.unstable_wrapCallback=function(a){var b=y;return function(){var c=y;y=b;try{return a.apply(this,arguments)}finally{y=c}}};
 
 }).call(this)}).call(this,require("timers").setImmediate)
-},{"timers":51}],50:[function(require,module,exports){
+},{"timers":52}],51:[function(require,module,exports){
 (function (process){(function (){
 'use strict';
 
@@ -12262,7 +12408,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"./cjs/scheduler.development.js":48,"./cjs/scheduler.production.min.js":49,"_process":40}],51:[function(require,module,exports){
+},{"./cjs/scheduler.development.js":49,"./cjs/scheduler.production.min.js":50,"_process":41}],52:[function(require,module,exports){
 (function (setImmediate,clearImmediate){(function (){
 var nextTick = require('process/browser.js').nextTick;
 var apply = Function.prototype.apply;
@@ -12341,4 +12487,4 @@ exports.clearImmediate = typeof clearImmediate === "function" ? clearImmediate :
   delete immediateIds[id];
 };
 }).call(this)}).call(this,require("timers").setImmediate,require("timers").clearImmediate)
-},{"process/browser.js":40,"timers":51}]},{},[3]);
+},{"process/browser.js":41,"timers":52}]},{},[4]);

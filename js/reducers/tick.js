@@ -21,18 +21,17 @@ const tick = (state) => {
     i++;
   }
 
-  return {...state, grammar: nextGrammar, gridMap: genGrid({...state, grammar: nextGrammar})};
+  return {...state, grammar: nextGrammar, gridMap: genGrid(state.initialPosition, nextGrammar)};
 };
 
-// if symbolFn returns true, then this bails out and returns false
-const genGrid = (state) => {
+const genGrid = (initialPosition, grammar) => {
   const locStack = [];
-  let loc = {...state.initialPosition}
+  let loc = {...initialPosition}
   let gridMap = {};
   let dir = 'UP';
 
   let i = 0;
-  for (let c of state.grammar) {
+  for (let c of grammar) {
     switch (c) {
       case '[':
         locStack.push({...loc});
@@ -58,8 +57,7 @@ const genGrid = (state) => {
         break;
       default:
         const symbol = config.symbols[c];
-        // const isEnd = i == state.grammar.length - 1 || state.grammar[i + 1] == ']';
-        let nextDir = getNextDir(state.grammar, i);
+        let nextDir = getNextDir(grammar, i);
         if (symbol) {
           gridMap[encodePosition(loc)] = {index: i, dir, nextDir, symbol: c};
         }
@@ -87,7 +85,7 @@ const doSnip = (state, pos) => {
     }
     endIndex++;
   }
-  return {...state, grammar: nextGrammar, gridMap: genGrid({...state, grammar: nextGrammar})};
+  return {...state, grammar: nextGrammar, gridMap: genGrid(state.initialPosition, nextGrammar)};
 }
 
 module.exports = {tick, genGrid, doSnip};
