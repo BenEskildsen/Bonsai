@@ -37,6 +37,9 @@ const rootReducer = (state, action) => {
       const {pos} = action;
       return doSnip(state, pos);
     }
+    case 'WIND_TICK': {
+      return {...state, windTime: state.windTime + 1};
+    }
   }
   return state;
 };
@@ -45,14 +48,20 @@ const rootReducer = (state, action) => {
 //////////////////////////////////////
 // Initializations
 const initState = () => {
+  const initialPosition = {
+    x: Math.round(config.gridSize.width / 2),
+    y: config.gridSize.height - 1,
+  };
   const state = {
     time: 0,
+    windTime: 0,
+    windMagnitude: 0.2,
     rules: {
       'B': [
         {rule: 'T^B', weight: 8},
         {rule: 'T<L', weight: 5},
         {rule: 'T>R', weight: 5},
-        {rule: 'T^[<L]T[>R]', weight: 10},
+        {rule: 'T^T[<L][>R]', weight: 10},
         {rule: 'F', weight: 2},
       ],
       'F': [
@@ -66,7 +75,7 @@ const initState = () => {
       ],
       'T': [
         {rule: 'T', weight: 1000},
-        {rule: 'B', weight: 1},
+        // {rule: 'B', weight: 1},
       ],
       'L': [
         {rule: 'T^L', weight: 3},
@@ -85,9 +94,22 @@ const initState = () => {
       ],
     },
     grammar: 'B',
-    initialPosition: {x: 30, y: 39},
-    gridMap: {[encodePosition({x: 30, y: 39})]: {index: 0, dir: 'UP', symbol: 'B', isEnd: true}},
+    initialPosition: {...initialPosition},
+    gridMap: {[encodePosition(initialPosition)]: {index: 0, dir: 'UP', symbol: 'B', nextDir: []}},
   };
+
+  // check localStorage
+  const data = localStorage.getItem("bonsaiGrammar");
+  if (data) {
+    const nextState = {
+      ...state,
+      ...JSON.parse(data),
+    };
+    return {
+      ...nextState,
+      gridMap: genGrid(nextState.initialPosition, nextState.grammar)
+    };
+  }
 
   return state;
 }

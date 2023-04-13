@@ -7,7 +7,8 @@ const {
 const {useEnhancedReducer} = require('bens_ui_components');
 const {config} = require('../config');
 const {render} = require('../render');
-const {floor} = require('bens_utils').vectors;
+const {floor, equals} = require('bens_utils').vectors;
+const {randomIn} = require('bens_utils').stochastic;
 const {rootReducer, initState} = require('../reducers/rootReducer');
 const {doSnip} = require('../reducers/tick');
 const {encodePosition} = require('bens_utils').helpers;
@@ -32,9 +33,9 @@ function ValMain(props) {
 
   // establish client ID
   useEffect(() => {
-    const clientID = parseInt(localStorage.getItem("bonsaiClientID"));
+    const clientID = localStorage.getItem("bonsaiClientID");
     if (clientID != null) {
-      dispatch({clientID});
+      dispatch({clientID: parseInt(clientID)});
     } else {
       fetch("https://api.val.town/eval/@beneskildsen.getClientID()")
         .then((res) => res.json())
@@ -51,6 +52,7 @@ function ValMain(props) {
       .then(res => res.json())
       .then((res) => {
         if (res.data.snips[getState().clientID]) setCursor('not-allowed');
+        localStorage.setItem("bonsaiGrammar", JSON.stringify(res.data));
         dispatch({type: 'SET_GRAMMAR', ...res.data});
       });
   }, []);
@@ -58,7 +60,23 @@ function ValMain(props) {
   // render on updates
   useEffect(() => {
     render(getState());
-  }, [state.time, state.grammar, state.gridMap]);
+  }, [state.time, state.grammar, state.gridMap, state.windTime]);
+
+  // wind
+  useEffect(() => {
+    const windInterval = setInterval(() => {
+      dispatch({type: 'WIND_TICK'});
+    }, config.msPerWindTick);
+
+    const windMagInterval = setInterval(() => {
+      dispatch({windMagnitude: randomIn(0, 5) / 10});
+    }, config.msPerWindMagnitude);
+
+    return () => {
+      clearInterval(windInterval);
+      clearInterval(windMagInterval);
+    }
+  }, []);
 
   // mouse handling for snipping
   useMouseHandler(
@@ -76,6 +94,7 @@ function ValMain(props) {
         if (!state.gridMap[encodePosition(pos)]) return;
         if (!state.clientID) return;
         if (state.snips[state.clientID] && state.clientID != 1) return;
+        if (equals(pos, state.initialPosition)) return; // don't snip at base
         // do the snip on the clientside to save compute
         const {grammar} = doSnip({...state}, pos);
         setCursor("wait");

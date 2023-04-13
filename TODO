@@ -1,19 +1,14 @@
 
-  - UI
-    - instructions for snip once per day
-    - show different mouse when snip allowed vs not?
-    - Bonsai Aesthetic notes
+  - (some cuts don't appear to do anything?)
 
-  - some kind of memory leak of grammar?
-    - growing off the screen
+  - val client:
+    - (also asks for it again every hour or whatever?)
 
-  - some cuts don't appear to do anything
-    - perhaps keep cutting as long as there is somethign there?
+  - growing off the screen
 
   - rules:
     - grow down sometimes?
 
-  - aesthetics
-    - nextDir should be an array
-    - better colors
-    - wind
+  - relevant metrics on val.town:
+    - snip: 27 as of 4/13
+    - getBonsaiState: 110 as of 4/13

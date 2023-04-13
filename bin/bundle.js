@@ -16,7 +16,8 @@ const {
   render
 } = require('../render');
 const {
-  floor
+  floor,
+  equals
 } = require('bens_utils').vectors;
 const {
   rootReducer,
@@ -42,7 +43,7 @@ function Main(props) {
   window.dispatch = dispatch;
   useEffect(() => {
     render(getState());
-  }, [state.time]);
+  }, [state.time, state.grammar]);
   useMouseHandler("canvas", {
     dispatch,
     getState
@@ -55,6 +56,7 @@ function Main(props) {
         width: window.innerWidth,
         height: window.innerHeight
       }));
+      if (equals(pos, state.initialPosition)) return;
       dispatch({
         type: 'SNIP',
         pos
@@ -89,8 +91,12 @@ const {
   render
 } = require('../render');
 const {
-  floor
+  floor,
+  equals
 } = require('bens_utils').vectors;
+const {
+  randomIn
+} = require('bens_utils').stochastic;
 const {
   rootReducer,
   initState
@@ -123,10 +129,10 @@ function ValMain(props) {
 
   // establish client ID
   useEffect(() => {
-    const clientID = parseInt(localStorage.getItem("bonsaiClientID"));
+    const clientID = localStorage.getItem("bonsaiClientID");
     if (clientID != null) {
       dispatch({
-        clientID
+        clientID: parseInt(clientID)
       });
     } else {
       fetch("https://api.val.town/eval/@beneskildsen.getClientID()").then(res => res.json()).then(res => {
@@ -142,6 +148,7 @@ function ValMain(props) {
   useEffect(() => {
     fetch("https://api.val.town/eval/@beneskildsen.getBonsaiState()").then(res => res.json()).then(res => {
       if (res.data.snips[getState().clientID]) setCursor('not-allowed');
+      localStorage.setItem("bonsaiGrammar", JSON.stringify(res.data));
       dispatch({
         type: 'SET_GRAMMAR',
         ...res.data
@@ -152,7 +159,25 @@ function ValMain(props) {
   // render on updates
   useEffect(() => {
     render(getState());
-  }, [state.time, state.grammar, state.gridMap]);
+  }, [state.time, state.grammar, state.gridMap, state.windTime]);
+
+  // wind
+  useEffect(() => {
+    const windInterval = setInterval(() => {
+      dispatch({
+        type: 'WIND_TICK'
+      });
+    }, config.msPerWindTick);
+    const windMagInterval = setInterval(() => {
+      dispatch({
+        windMagnitude: randomIn(0, 5) / 10
+      });
+    }, config.msPerWindMagnitude);
+    return () => {
+      clearInterval(windInterval);
+      clearInterval(windMagInterval);
+    };
+  }, []);
 
   // mouse handling for snipping
   useMouseHandler("canvas", {
@@ -170,6 +195,7 @@ function ValMain(props) {
       if (!state.gridMap[encodePosition(pos)]) return;
       if (!state.clientID) return;
       if (state.snips[state.clientID] && state.clientID != 1) return;
+      if (equals(pos, state.initialPosition)) return; // don't snip at base
       // do the snip on the clientside to save compute
       const {
         grammar
@@ -202,8 +228,8 @@ module.exports = ValMain;
 },{"../config":3,"../reducers/rootReducer":6,"../reducers/tick":7,"../render":8,"../utils":9,"bens_ui_components":33,"bens_utils":40,"react":48}],3:[function(require,module,exports){
 const config = {
   gridSize: {
-    width: 60,
-    height: 40,
+    width: 90,
+    height: 60,
     canvasMult: 10
   },
   symbols: {
@@ -236,7 +262,9 @@ const config = {
     } // Stem leaf
   },
 
-  msPerTick: 1500
+  msPerTick: 1500,
+  msPerWindTick: 300,
+  msPerWindMagnitude: 5000
 };
 module.exports = {
   config
@@ -338,6 +366,13 @@ const rootReducer = (state, action) => {
         } = action;
         return doSnip(state, pos);
       }
+    case 'WIND_TICK':
+      {
+        return {
+          ...state,
+          windTime: state.windTime + 1
+        };
+      }
   }
   return state;
 };
@@ -345,8 +380,14 @@ const rootReducer = (state, action) => {
 //////////////////////////////////////
 // Initializations
 const initState = () => {
+  const initialPosition = {
+    x: Math.round(config.gridSize.width / 2),
+    y: config.gridSize.height - 1
+  };
   const state = {
     time: 0,
+    windTime: 0,
+    windMagnitude: 0.2,
     rules: {
       'B': [{
         rule: 'T^B',
@@ -358,7 +399,7 @@ const initState = () => {
         rule: 'T>R',
         weight: 5
       }, {
-        rule: 'T^[<L]T[>R]',
+        rule: 'T^T[<L][>R]',
         weight: 10
       }, {
         rule: 'F',
@@ -384,10 +425,10 @@ const initState = () => {
       'T': [{
         rule: 'T',
         weight: 1000
-      }, {
-        rule: 'B',
-        weight: 1
-      }],
+      }
+      // {rule: 'B', weight: 1},
+      ],
+
       'L': [{
         rule: 'T^L',
         weight: 3
@@ -421,21 +462,30 @@ const initState = () => {
     },
     grammar: 'B',
     initialPosition: {
-      x: 30,
-      y: 39
+      ...initialPosition
     },
     gridMap: {
-      [encodePosition({
-        x: 30,
-        y: 39
-      })]: {
+      [encodePosition(initialPosition)]: {
         index: 0,
         dir: 'UP',
         symbol: 'B',
-        isEnd: true
+        nextDir: []
       }
     }
   };
+
+  // check localStorage
+  const data = localStorage.getItem("bonsaiGrammar");
+  if (data) {
+    const nextState = {
+      ...state,
+      ...JSON.parse(data)
+    };
+    return {
+      ...nextState,
+      gridMap: genGrid(nextState.initialPosition, nextState.grammar)
+    };
+  }
   return state;
 };
 module.exports = {
@@ -457,7 +507,9 @@ const {
 } = require('../config');
 const {
   getParenLevel,
-  getNextDir
+  getNextDir,
+  getPrevSymbol,
+  cleanupGrammar
 } = require('../utils');
 const tick = state => {
   const {
@@ -487,6 +539,7 @@ const tick = state => {
 };
 const genGrid = (initialPosition, grammar) => {
   const locStack = [];
+  const dirStack = [];
   let loc = {
     ...initialPosition
   };
@@ -499,9 +552,11 @@ const genGrid = (initialPosition, grammar) => {
         locStack.push({
           ...loc
         });
+        dirStack.push(dir);
         break;
       case ']':
         loc = locStack.pop();
+        dir = dirStack.pop();
         break;
       case '^':
         dir = 'UP';
@@ -521,13 +576,13 @@ const genGrid = (initialPosition, grammar) => {
         break;
       default:
         const symbol = config.symbols[c];
-        let nextDir = getNextDir(grammar, i);
         if (symbol) {
           gridMap[encodePosition(loc)] = {
             index: i,
             dir,
-            nextDir,
-            symbol: c
+            nextDir: getNextDir(grammar, i),
+            symbol: c,
+            parenLevel: getParenLevel(grammar, i)
           };
         }
     }
@@ -543,6 +598,7 @@ const doSnip = (state, pos) => {
   const parenLevel = getParenLevel(state.grammar, index);
   let numOpens = parenLevel;
   let endIndex = index;
+  // cut things out until we're at the parent parenLevel
   while (endIndex < state.grammar.length) {
     if (state.grammar[endIndex] == '[') numOpens++;
     if (state.grammar[endIndex] == ']') numOpens--;
@@ -552,6 +608,11 @@ const doSnip = (state, pos) => {
     }
     endIndex++;
   }
+  const prevSymbol = getPrevSymbol(nextGrammar, index);
+  if (prevSymbol && prevSymbol.symbol == 'T') {
+    nextGrammar = nextGrammar.slice(0, prevSymbol.index) + 'B' + nextGrammar.slice(prevSymbol.index + 1);
+  }
+  nextGrammar = cleanupGrammar(nextGrammar);
   return {
     ...state,
     grammar: nextGrammar,
@@ -579,59 +640,67 @@ const render = state => {
   const s = canvasMult;
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "steelblue";
+  const blue = Math.sin(state.windTime * 5 % 360 / 180 * Math.PI) * 15 + 130;
+  ctx.fillStyle = 'rgb(70,' + blue + ',180)'; // hue around steelblue
   ctx.fillRect(0, 0, width * canvasMult, height * canvasMult);
-  // ctx.globalAlpha = 0.7;
-
   for (const p in state.gridMap) {
     const sq = state.gridMap[p];
     const symbol = config.symbols[sq.symbol];
     const pos = decodePosition(p);
+    ctx.save();
+    if (sq.symbol == 'F' || sq.symbol == 'S') {
+      let windRadians = state.windTime + sq.parenLevel; //  % 360) / 180 * Math.PI;
+      ctx.translate(Math.sin(windRadians) * state.windMagnitude, Math.cos(windRadians) * sq.parenLevel * state.windMagnitude);
+    }
     ctx.fillStyle = symbol.color;
     ctx.fillRect(pos.x * s, pos.y * s, s, s);
     ctx.strokeStyle = 'black';
     ctx.beginPath();
     if (sq.dir == 'UP') {
       ctx.moveTo(pos.x * s, pos.y * s + s);
-      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('LEFT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s);
-      lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('UP') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
-      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('RIGHT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
     } else if (sq.dir == 'DOWN') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('LEFT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
-      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('DOWN') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('RIGHT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
     } else if (sq.dir == 'RIGHT') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('UP') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
-      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('RIGHT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('DOWN') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
     } else if (sq.dir == 'LEFT') {
       ctx.moveTo(pos.x * s + s, pos.y * s);
-      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('UP') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s);
-      lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('LEFT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
-      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('DOWN') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
     }
     ctx.stroke();
     ctx.closePath();
+    ctx.restore();
   }
 };
 module.exports = {
   render
 };
 },{"./config":3,"bens_utils":40}],9:[function(require,module,exports){
+const {
+  config
+} = require('./config');
 const initGrid = (width, height, initial) => {
   const grid = [];
   for (let x = 0; x < width; x++) {
@@ -652,13 +721,28 @@ const getParenLevel = (grammar, index) => {
   return numOpens;
 };
 const getNextDir = (grammar, index) => {
-  if (index >= grammar.length - 1) return false;
-  if (grammar[index + 1] == '^') return 'UP';
-  if (grammar[index + 1] == 'V') return 'DOWN';
-  if (grammar[index + 1] == '<') return 'LEFT';
-  if (grammar[index + 1] == '>') return 'RIGHT';
-  if (grammar[index + 1] == ']') return false;
-  return false;
+  if (index >= grammar.length - 1) return [];
+  if (grammar[index + 1] == '^') return ['UP'];
+  if (grammar[index + 1] == 'V') return ['DOWN'];
+  if (grammar[index + 1] == '<') return ['LEFT'];
+  if (grammar[index + 1] == '>') return ['RIGHT'];
+  if (grammar[index + 1] == ']') return [];
+  // HACK: we've hardcoded how the branching works
+  if (grammar[index + 1] == '[') return ['LEFT', 'RIGHT'];
+  return [];
+};
+const getPrevSymbol = (grammar, index) => {
+  for (let i = index - 1; i >= 0; i--) {
+    const s = grammar[i];
+    if (s == '[') return null;
+    if (config.symbols[s] != null) {
+      return {
+        symbol: s,
+        index: i
+      };
+    }
+  }
+  return null;
 };
 const encodeGrammar = grammar => {
   let encodedGrammar = '';
@@ -679,13 +763,75 @@ const encodeGrammar = grammar => {
   }
   return encodedGrammar;
 };
+const isControlChar = (c, parensCount) => {
+  if (c == '^') return true;
+  if (c == 'V') return true;
+  if (c == '<') return true;
+  if (c == '>') return true;
+  if (c == ']') return parensCount;
+  if (c == '[') return parensCount;
+  return false;
+};
+
+// from the starting index (an open [), if there are no symbols inside
+// that levels of brackets, then return the index of the matching close ]
+const isEmptyParens = (grammar, index) => {
+  let numOpens = 0;
+  let symbolsSeen = 0;
+  for (let i = index; i < grammar.length; i++) {
+    if (!isControlChar(grammar[i], true)) return false;
+    if (grammar[i] == '[') numOpens++;
+    if (grammar[i] == ']') numOpens--;
+    if (numOpens == 0) return i; // found matching close paren without seeing a symbol
+  }
+  // should be unreachable:
+  return false;
+};
+const cleanupGrammar = grammar => {
+  let nextGrammar = '';
+
+  // remove empty parens
+  let prevIndex = 0;
+  for (let i = 0; i < grammar.length; i++) {
+    if (grammar[i] == '[') {
+      let endIndex = isEmptyParens(grammar, i);
+      if (endIndex > 0) {
+        nextGrammar += grammar.slice(prevIndex, i);
+        prevIndex = endIndex + 1;
+      }
+    }
+  }
+  nextGrammar += grammar.slice(prevIndex);
+  let finalGrammar = '';
+  prevIndex = 0;
+  // remove any parens ending with control chars
+  for (let i = 0; i < nextGrammar.length; i++) {
+    if (nextGrammar[i] == ']') {
+      let j = i - 1;
+      for (j; isControlChar(nextGrammar[j]); j--);
+      finalGrammar += nextGrammar.slice(prevIndex, j + 1);
+      prevIndex = i;
+    }
+  }
+  finalGrammar += nextGrammar.slice(prevIndex);
+
+  // remove trailing control chars
+  while (finalGrammar.length >= 2 && isControlChar(finalGrammar[finalGrammar.length - 1])) {
+    finalGrammar = finalGrammar.slice(0, finalGrammar.length - 1);
+  }
+  return finalGrammar;
+};
+window.cleanupGrammar = cleanupGrammar;
 module.exports = {
   initGrid,
   getParenLevel,
   getNextDir,
-  encodeGrammar
+  encodeGrammar,
+  getPrevSymbol,
+  cleanupGrammar,
+  isControlChar
 };
-},{}],10:[function(require,module,exports){
+},{"./config":3}],10:[function(require,module,exports){
 const React = require('react');
 const Button = require('./Button.react');
 const {

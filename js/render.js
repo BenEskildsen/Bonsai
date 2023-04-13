@@ -9,14 +9,23 @@ const render = (state) => {
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "steelblue";
+  const blue = Math.sin(((state.windTime * 5) % 360) / 180 * Math.PI) * 15 + 130;
+  ctx.fillStyle = 'rgb(70,' + blue + ',180)'; // hue around steelblue
   ctx.fillRect(0, 0, width * canvasMult, height * canvasMult);
-    // ctx.globalAlpha = 0.7;
 
   for (const p in state.gridMap) {
     const sq = state.gridMap[p];
     const symbol = config.symbols[sq.symbol];
     const pos = decodePosition(p);
+
+    ctx.save();
+    if (sq.symbol == 'F' || sq.symbol == 'S') {
+      let windRadians = ((state.windTime + sq.parenLevel)) //  % 360) / 180 * Math.PI;
+      ctx.translate(
+        Math.sin(windRadians) * state.windMagnitude,
+        Math.cos(windRadians) * sq.parenLevel * state.windMagnitude,
+      );
+    }
 
     ctx.fillStyle = symbol.color;
     ctx.fillRect(pos.x * s, pos.y * s, s, s);
@@ -25,39 +34,41 @@ const render = (state) => {
     ctx.beginPath();
     if (sq.dir == 'UP') {
       ctx.moveTo(pos.x * s, pos.y * s + s);
-      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('LEFT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s);
-      lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('UP') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
-      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('RIGHT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
     } else if (sq.dir == 'DOWN') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      let lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('LEFT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
-      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('DOWN') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('RIGHT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
     } else if (sq.dir == 'RIGHT') {
       ctx.moveTo(pos.x * s, pos.y * s);
-      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('UP') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s);
-      lineFn = sq.nextDir == 'RIGHT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('RIGHT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
-      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('DOWN') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
     } else if (sq.dir == 'LEFT') {
       ctx.moveTo(pos.x * s + s, pos.y * s);
-      let lineFn = sq.nextDir == 'UP' ? 'moveTo' : 'lineTo';
+      let lineFn = sq.nextDir.includes('UP') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s);
-      lineFn = sq.nextDir == 'LEFT' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('LEFT') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s, pos.y * s + s);
-      lineFn = sq.nextDir == 'DOWN' ? 'moveTo' : 'lineTo';
+      lineFn = sq.nextDir.includes('DOWN') ? 'moveTo' : 'lineTo';
       ctx[lineFn](pos.x * s + s, pos.y * s + s);
     }
     ctx.stroke();
     ctx.closePath();
+
+    ctx.restore();
   }
 
 };

@@ -7,7 +7,7 @@ const {
 const {useEnhancedReducer} = require('bens_ui_components');
 const {config} = require('../config');
 const {render} = require('../render');
-const {floor} = require('bens_utils').vectors;
+const {floor, equals} = require('bens_utils').vectors;
 const {rootReducer, initState} = require('../reducers/rootReducer');
 const {encodePosition} = require('bens_utils').helpers;
 const {useEffect, useState, useMemo} = React;
@@ -28,7 +28,7 @@ function Main(props) {
 
   useEffect(() => {
     render(getState());
-  }, [state.time]);
+  }, [state.time, state.grammar]);
 
   useMouseHandler(
     "canvas", {dispatch, getState},
@@ -42,6 +42,7 @@ function Main(props) {
           },
           {width: window.innerWidth, height: window.innerHeight},
         ));
+        if (equals(pos, state.initialPosition)) return;
         dispatch({type: 'SNIP', pos});
       }
     },

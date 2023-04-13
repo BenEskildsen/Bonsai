@@ -1,5 +1,5 @@
 const config = {
-  gridSize: {width: 60, height: 40, canvasMult: 10},
+  gridSize: {width: 90, height: 60, canvasMult: 10},
   symbols: {
     T: {color: 'rgb(134,89,63)'}, // trunk
     D: {color: 'rgb(96,58,50)'}, // dead
@@ -10,6 +10,9 @@ const config = {
     S: {color: 'green'}, // Stem leaf
   },
   msPerTick: 1500,
+
+  msPerWindTick: 300,
+  msPerWindMagnitude: 5000,
 }
 
 module.exports = {

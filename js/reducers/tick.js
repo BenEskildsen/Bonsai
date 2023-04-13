@@ -3,7 +3,10 @@ const {initGrid} = require('../utils');
 const {weightedOneOf} = require('bens_utils').stochastic;
 const {encodePosition} = require('bens_utils').helpers;
 const {config} = require('../config');
-const {getParenLevel, getNextDir} = require('../utils');
+const {
+  getParenLevel, getNextDir, getPrevSymbol,
+  cleanupGrammar,
+} = require('../utils');
 
 const tick = (state) => {
   const {width, height, grid, rules} = state;
@@ -26,6 +29,7 @@ const tick = (state) => {
 
 const genGrid = (initialPosition, grammar) => {
   const locStack = [];
+  const dirStack = [];
   let loc = {...initialPosition}
   let gridMap = {};
   let dir = 'UP';
@@ -35,9 +39,11 @@ const genGrid = (initialPosition, grammar) => {
     switch (c) {
       case '[':
         locStack.push({...loc});
+        dirStack.push(dir);
         break;
       case ']':
         loc = locStack.pop();
+        dir = dirStack.pop();
         break;
       case '^':
         dir = 'UP';
@@ -57,9 +63,14 @@ const genGrid = (initialPosition, grammar) => {
         break;
       default:
         const symbol = config.symbols[c];
-        let nextDir = getNextDir(grammar, i);
         if (symbol) {
-          gridMap[encodePosition(loc)] = {index: i, dir, nextDir, symbol: c};
+          gridMap[encodePosition(loc)] = {
+            index: i,
+            dir,
+            nextDir: getNextDir(grammar, i),
+            symbol: c,
+            parenLevel: getParenLevel(grammar, i),
+          };
         }
     }
     i++
@@ -76,6 +87,7 @@ const doSnip = (state, pos) => {
   const parenLevel = getParenLevel(state.grammar, index);
   let numOpens = parenLevel;
   let endIndex = index;
+  // cut things out until we're at the parent parenLevel
   while (endIndex < state.grammar.length) {
     if (state.grammar[endIndex] == '[') numOpens++;
     if (state.grammar[endIndex] == ']') numOpens--;
@@ -85,6 +97,12 @@ const doSnip = (state, pos) => {
     }
     endIndex++;
   }
+  const prevSymbol = getPrevSymbol(nextGrammar, index);
+  if (prevSymbol && prevSymbol.symbol == 'T') {
+    nextGrammar =
+      nextGrammar.slice(0, prevSymbol.index) + 'B' + nextGrammar.slice(prevSymbol.index + 1);
+  }
+  nextGrammar = cleanupGrammar(nextGrammar);
   return {...state, grammar: nextGrammar, gridMap: genGrid(state.initialPosition, nextGrammar)};
 }
 
